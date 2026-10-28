@@ -8,11 +8,14 @@ public static class FileExtractor
     public const long MaxBytes = 32 * 1024 * 1024;
     public static string Extract(string inputPath, string workspace)
     {
+        if (!System.IO.Path.IsPathFullyQualified(inputPath) || inputPath.StartsWith("\\\\", StringComparison.Ordinal) || inputPath.StartsWith("//", StringComparison.Ordinal))
+            throw new InvalidDataException("local_file_required");
         var reference = Contract.Id();
         var artifacts = System.IO.Path.Combine(workspace, "artifacts");
         Directory.CreateDirectory(artifacts);
         var destination = System.IO.Path.Combine(artifacts, reference + ".bin");
         using var capture = new CaptureWriter(System.IO.Path.Combine(workspace, "captures"), "selected-file");
+        var recorded = false;
         try
         {
             using var input = new FileStream(inputPath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -33,12 +36,14 @@ public static class FileExtractor
                 output.Flush(true);
             }
             capture.Artifact(reference, Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant(), total);
+            recorded = true;
             capture.End("completed");
             return capture.Path;
         }
         catch
         {
-            if (File.Exists(destination)) File.Delete(destination);
+            // Once an artifact record is durable, preserve the bytes it references even if the end write fails.
+            if (!recorded && File.Exists(destination)) File.Delete(destination);
             throw;
         }
     }

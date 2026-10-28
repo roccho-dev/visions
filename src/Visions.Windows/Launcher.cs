@@ -10,15 +10,17 @@ internal sealed class Launcher : Form
     private readonly ComboBox targets = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 380 };
     private readonly ComboBox captures = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 380 };
     private readonly CheckBox consent = new() { Text = "対象アプリを観測する許可があります（最大15分）", AutoSize = true };
-    private readonly Button start = new() { Text = "記録開始", AutoSize = true };
+    private readonly Button start = new() { Text = "記録開始", AutoSize = true, Enabled = false };
     private readonly Button stop = new() { Text = "停止", AutoSize = true, Enabled = false };
+    private readonly Button refreshTargetsButton;
+    private readonly Button importButton;
+    private readonly Button demoButton;
     private readonly Label status = new() { Text = "記録していません。", AutoSize = true, MaximumSize = new Size(620, 0) };
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 500 };
     private Process? worker;
     private LocalViewer? viewer;
     private string? selected;
-    private bool closing;
-    private bool starting;
+    private bool closing, closePending, starting;
     private string CaptureDirectory => System.IO.Path.Combine(workspace, "captures");
     private sealed record Target(int Pid, long Ticks, string Display) { public override string ToString() => Display; }
     private sealed record CaptureItem(string Path) { public override string ToString() => System.IO.Path.GetFileNameWithoutExtension(Path)[..8]; }
@@ -35,11 +37,11 @@ internal sealed class Launcher : Form
         layout.Controls.Add(new Label { Text = "流れ・時間・根拠を、端末内だけで。", Font = new Font(Font.FontFamily, 17), AutoSize = true });
         layout.Controls.Add(new Label { Text = "フォーカス遷移だけを記録します。文字・画面・患者名は取りません。\nすべての操作を捉えるものではありません。", AutoSize = true, Margin = new Padding(0, 12, 0, 12) });
         var choose = new FlowLayoutPanel { AutoSize = true }; choose.Controls.Add(targets);
-        AddButton(choose, "対象を再読込", RefreshTargets); layout.Controls.Add(choose);
+        refreshTargetsButton = AddButton(choose, "対象を再読込", RefreshTargets); layout.Controls.Add(choose);
         layout.Controls.Add(consent);
         var controls = new FlowLayoutPanel { AutoSize = true }; controls.Controls.Add(start); controls.Controls.Add(stop);
-        AddButton(controls, "出力ファイルを取り込む", ImportFile);
-        AddButton(controls, "デモ", () => { try { SelectCapture(Demo.Create(CaptureDirectory)); } catch { status.Text = "デモを保存できません。"; } });
+        importButton = AddButton(controls, "出力ファイルを取り込む", ImportFile);
+        demoButton = AddButton(controls, "デモ", () => { try { SelectCapture(Demo.Create(CaptureDirectory)); } catch { status.Text = "デモを保存できません。"; } });
         layout.Controls.Add(controls); layout.Controls.Add(status);
         var view = new FlowLayoutPanel { AutoSize = true }; view.Controls.Add(captures);
         AddButton(view, "可視化を開く", OpenViewer); layout.Controls.Add(view);
@@ -51,7 +53,10 @@ internal sealed class Launcher : Form
         timer.Tick += (_, _) =>
         {
             if (!starting && worker is { HasExited: true })
-            { var code = worker.ExitCode; worker.Dispose(); worker = null; stop.Enabled = false; start.Enabled = true; status.Text = code == 0 ? "記録を終了しました。" : "取得できない情報があります。可視化の不明・欠損を確認してください。"; }
+            {
+                var code = worker.ExitCode; worker.Dispose(); worker = null; SetRecording(false);
+                status.Text = code == 0 ? "記録を終了しました。" : "取得できない情報があります。可視化の不明・欠損を確認してください。";
+            }
         };
         Shown += async (_, _) =>
         {
@@ -60,7 +65,7 @@ internal sealed class Launcher : Form
                 Directory.CreateDirectory(CaptureDirectory);
                 RefreshTargets(); RefreshCaptures();
                 viewer = await LocalViewer.StartAsync(() => Volatile.Read(ref selected));
-                timer.Start();
+                SetRecording(false); timer.Start();
             }
             catch { status.Text = "初期化できません。保存権限と端末の制限を確認してください。"; start.Enabled = false; }
         };
@@ -68,17 +73,24 @@ internal sealed class Launcher : Form
         {
             if (closing) return;
             e.Cancel = true;
-            await StopCapture();
-            timer.Stop();
+            if (closePending) return;
+            closePending = true; Enabled = false;
+            await StopCapture(); timer.Stop();
             if (viewer is not null) { try { await viewer.DisposeAsync(); } catch { } }
             closing = true; Close();
         };
     }
-    private static void AddButton(Control parent, string text, Action action)
+    private void SetRecording(bool active)
+    {
+        start.Enabled = !active && viewer is not null;
+        stop.Enabled = active;
+        targets.Enabled = consent.Enabled = refreshTargetsButton.Enabled = importButton.Enabled = demoButton.Enabled = !active;
+    }
+    private static Button AddButton(Control parent, string text, Action action)
     {
         var button = new Button { Text = text, AutoSize = true };
         button.Click += (_, _) => { try { action(); } catch { MessageBox.Show("操作できませんでした。端末の権限・保存先を確認してください。", "visions"); } };
-        parent.Controls.Add(button);
+        parent.Controls.Add(button); return button;
     }
     private void RefreshTargets()
     {
@@ -91,7 +103,6 @@ internal sealed class Launcher : Form
                 try
                 {
                     if (process.Id == Environment.ProcessId || process.SessionId != self.SessionId || process.MainWindowHandle == IntPtr.Zero) continue;
-                    // The process label is shown locally, never written into facts.
                     targets.Items.Add(new Target(process.Id, process.StartTime.ToUniversalTime().Ticks, $"{process.ProcessName} / PID {process.Id}"));
                 }
                 catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or NotSupportedException) { }
@@ -118,41 +129,50 @@ internal sealed class Launcher : Form
     {
         if (worker is not null || !consent.Checked || targets.SelectedItem is not Target target)
         { status.Text = "対象と観測の許可を確認してください。"; return; }
-        starting = true; start.Enabled = false; stop.Enabled = true;
+        starting = true; SetRecording(true);
         try
         {
-            worker = Process.Start(Program.Child("--record", target.Pid.ToString(System.Globalization.CultureInfo.InvariantCulture), target.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture), CaptureDirectory));
-            if (worker is null) throw new InvalidOperationException();
-            var filename = await worker.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
-            if (filename is null || System.IO.Path.GetExtension(filename) != ".jsonl" || !Contract.Hex(System.IO.Path.GetFileNameWithoutExtension(filename), 32) || System.IO.Path.GetFileName(filename) != filename)
+            var child = Process.Start(Program.Child("--record", target.Pid.ToString(System.Globalization.CultureInfo.InvariantCulture), target.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture), CaptureDirectory));
+            worker = child ?? throw new InvalidOperationException();
+            var filename = await child.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            if (worker != child) return; // Stop was requested while registration was still pending.
+            if (child.HasExited || filename is null || System.IO.Path.GetExtension(filename) != ".jsonl" || !Contract.Hex(System.IO.Path.GetFileNameWithoutExtension(filename), 32) || System.IO.Path.GetFileName(filename) != filename)
                 throw new InvalidDataException();
             SelectCapture(System.IO.Path.Combine(CaptureDirectory, filename));
             status.Text = "● 記録中 — 対象アプリを普段どおり操作してください。停止、または15分で終了します。";
         }
         catch { await StopCapture(); status.Text = "記録を開始できません。権限・対象アプリのUIA対応を確認してください。"; }
-        finally { starting = false; }
+        finally { starting = false; if (worker is null) SetRecording(false); }
     }
     private async Task StopCapture()
     {
         var process = worker;
         if (process is null) return;
         worker = null;
+        var confirmed = false;
         try
         {
             if (!process.HasExited)
             {
                 await process.StandardInput.WriteLineAsync("stop"); await process.StandardInput.FlushAsync();
-                try { await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(3)); }
-                catch (TimeoutException) { process.Kill(); await process.WaitForExitAsync(); }
+                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(3));
             }
         }
-        catch (Exception e) when (e is IOException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
-        finally { process.Dispose(); stop.Enabled = false; start.Enabled = true; status.Text = "記録を停止しました。強制終了した区間は未完了として表示されます。"; }
+        catch (Exception e) when (e is IOException or TimeoutException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
+        finally
+        {
+            try { if (!process.HasExited) process.Kill(); confirmed = process.WaitForExit(1000); }
+            catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception) { }
+            process.Dispose(); SetRecording(false);
+            status.Text = confirmed ? "記録を停止しました。強制終了した区間は未完了として表示されます。" : "停止を確認できません。visionsの取得子プロセスを確認してください。";
+        }
     }
     private void ImportFile()
     {
         using var dialog = new OpenFileDialog { Title = "取り込みを許可された既存の出力ファイル", Filter = "業務出力|*.csv;*.json;*.xml;*.txt|すべてのファイル|*.*", CheckFileExists = true };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (new DriveInfo(System.IO.Path.GetPathRoot(dialog.FileName)!).DriveType == DriveType.Network)
+        { status.Text = "初期版は端末内・USB等のローカルファイルだけを扱います。"; return; }
         if (MessageBox.Show(this, "選んだファイル全体をこの端末の保存場所へコピーします。\n内容の個人情報は除去しません。許可を受けたデータだけを選んでください。", "取り込みの確認", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
         try { SelectCapture(FileExtractor.Extract(dialog.FileName, workspace)); }
         catch { status.Text = "取り込めません。ファイルの権限と32 MiBの上限を確認してください。"; }

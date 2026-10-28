@@ -20,7 +20,7 @@ void Reject(string name, Action action)
 }
 string Id(int n) => n.ToString("x32");
 Fact Make(int seq, string kind, object data, int capture = 200, int source = 100) =>
-    new(1, Id(capture * 10000 + seq), kind, DateTimeOffset.Parse("2026-01-01T00:00:00Z").AddSeconds(seq),
+    new(1, Id(capture * 1000000 + source * 1000 + seq), kind, DateTimeOffset.Parse("2026-01-01T00:00:00Z").AddSeconds(seq),
         Id(source), seq, Id(capture), Contract.Data(data));
 Fact Start(int capture = 200, int source = 100) => Make(1, "capture", new { phase = "start", scope = "synthetic", coverage = "bounded" }, capture, source);
 Fact Focus(int seq, int target = 400, int capture = 200, int source = 100) => Make(seq, "observation", new { @event = "ui.focus", target = Id(target), role = "button" }, capture, source);
@@ -48,6 +48,7 @@ try
     Check("incomplete tail excluded", torn.Facts.Count == 2 && torn.Issues.Single().Code == "incomplete_tail");
     var invalid = Journal.Parse(Lines(Start()) + "{\"private\":\"SECRET\"}\n" + Lines(Focus(3)));
     Check("invalid middle stops replay", invalid.Facts.Count == 1 && invalid.Issues.Single().Code == "invalid_record");
+    Check("invalid payload absent from projection", !JsonSerializer.Serialize(Projection.Build(invalid), Contract.Json).Contains("SECRET"));
     Check("duplicate id rejected", Journal.Parse(Lines(Start(), Start())).Issues.Count == 1);
     Check("file size bounded", Journal.Parse(new string('x', Contract.MaxBytes + 1)).Issues.Single().Code == "file_limit");
     var view = Projection.Build(read);
@@ -61,8 +62,10 @@ try
     Check("no edge across explicit gap", reported.Transitions.Count == 0);
     var clock = View(Start(), Focus(2), Focus(3) with { At = Start().At }, End(4));
     Check("clock regression is unknown", clock.Transitions.Count == 0 && clock.Issues.Any(i => i.StartsWith("clock_reversed:")));
-    Check("no edge across captures", View(Start(), Focus(2), End(3), Start(201), Focus(2, capture: 201), End(3, 201)).Transitions.Count == 0);
-    Check("no edge across sources", View(Start(), Focus(2), Start(source: 101), Focus(2, source: 101)).Transitions.Count == 0);
+    var captures = View(Start(), Focus(2), End(3), Start(201), Focus(2, capture: 201), End(3, 201));
+    Check("no edge across captures", captures.Steps.Count == 2 && captures.Transitions.Count == 0);
+    var sources = View(Start(), Focus(2), Start(source: 101), Focus(2, source: 101));
+    Check("no edge across sources", sources.Steps.Count == 2 && sources.Transitions.Count == 0);
     Check("missing end remains incomplete", View(Start(), Focus(2)).Issues.Any(i => i.StartsWith("open_or_incomplete:")));
     Check("no invented start", View(Focus(2), End(3)).Steps.Count == 0);
     Check("no step after end", View(Start(), Focus(2), End(3), Focus(4)).Steps.Count == 1);
@@ -82,14 +85,21 @@ try
     Check("file extraction preserves selected bytes", body.SequenceEqual(File.ReadAllBytes(input)));
     Check("digest verifies stored bytes", Contract.Text(artifact.Data, "digest") == Convert.ToHexString(SHA256.HashData(body)).ToLowerInvariant());
     Check("facts omit content and source filename", !File.ReadAllText(imported).Contains("SENSITIVE_MARKER") && !File.ReadAllText(imported).Contains("private-filename"));
+    Reject("reject network path before IO", () => FileExtractor.Extract("//server/share/file.csv", root));
+    Reject("reject relative path before IO", () => FileExtractor.Extract("relative.csv", root));
     var big = Path.Combine(root, "large.csv");
     using (var file = File.Create(big)) file.SetLength(FileExtractor.MaxBytes + 1);
     var before = Directory.GetFiles(Path.Combine(root, "artifacts")).Length;
     Reject("reject oversized artifact", () => FileExtractor.Extract(big, root));
     Check("failure leaves no copied artifact", Directory.GetFiles(Path.Combine(root, "artifacts")).Length == before);
-    await using (var server = await LocalViewer.StartAsync(() => imported))
+    var env = "Kestrel__Endpoints__External__Url";
+    var oldEnvironment = Environment.GetEnvironmentVariable(env);
+    Environment.SetEnvironmentVariable(env, "http://0.0.0.0:40177");
+    try
     {
+        await using var server = await LocalViewer.StartAsync(() => imported);
         using var client = new HttpClient();
+        Check("host environment cannot add listeners", server.Url.StartsWith("http://127.0.0.1:", StringComparison.Ordinal));
         var page = await client.GetAsync(server.Url);
         Check("local viewer opens", page.StatusCode == HttpStatusCode.OK);
         Check("CSP blocks embedded foreign content", page.Headers.GetValues("Content-Security-Policy").Single().Contains("frame-ancestors 'none'"));
@@ -101,8 +111,11 @@ try
         Check("cross origin rejected", (await client.SendAsync(cross)).StatusCode == HttpStatusCode.Forbidden);
         using var rebound = new HttpRequestMessage(HttpMethod.Get, server.Url); rebound.Headers.Host = "example.invalid";
         Check("DNS rebinding host rejected", (await client.SendAsync(rebound)).StatusCode == HttpStatusCode.Forbidden);
+        using var foreign = new HttpRequestMessage(HttpMethod.Get, server.Url); foreign.Headers.Add("Sec-Fetch-Site", "cross-site");
+        Check("cross site navigation rejected", (await client.SendAsync(foreign)).StatusCode == HttpStatusCode.Forbidden);
         Check("local model does not cache", (await client.GetAsync(server.Url + "model")).Headers.CacheControl?.NoStore == true);
     }
+    finally { Environment.SetEnvironmentVariable(env, oldEnvironment); }
     Console.WriteLine($"RESULT {passed.Count}/{passed.Count} PASS");
     return 0;
 }
