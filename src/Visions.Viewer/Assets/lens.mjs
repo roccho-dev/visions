@@ -85,7 +85,7 @@ if (typeof document !== 'undefined') {
   const boxHeight = node => 54 + (node.children.length ? 8 + node.children.reduce((n, x) => n + boxHeight(x) + 8, 0) : 0);
   function render() {
     svg.replaceChildren();
-    if (!state.world) return;
+    if (!state.world) { lenses.replaceChildren(); back.disabled = true; return; }
     const view = projectWorld(state.world, state.lens);
     height = Math.max(650, boxHeight(view.left) + 85, boxHeight(view.right) + 85);
     const edges = make('g'), nodes = make('g'), positions = new Map();
@@ -137,7 +137,9 @@ if (typeof document !== 'undefined') {
       pop.append(make('rect', { x: px, y: py, width: 305, height: 156, rx: 11 }));
       list.forEach((t, i) => pop.append(make('text', { x: px + 14, y: py + 25 + i * 27 }, String(t).slice(0, 42))));
       const close = make('text', { x: px + 285, y: py + 22, 'class': 'process-close', tabindex: '0', role: 'button' }, '×');
-      close.addEventListener('click', () => { state.selected = null; render(); });
+      const closePopup = () => { state.selected = null; render(); };
+      close.addEventListener('click', closePopup);
+      close.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); closePopup(); } });
       pop.append(close);
       svg.append(pop);
     }
@@ -175,7 +177,8 @@ if (typeof document !== 'undefined') {
   document.getElementById('process-file').addEventListener('change', async event => {
     const file = event.target.files?.[0]; if (!file) return;
     try { ok(file.size <= 512 * 1024, 'file_limit'); accept(JSON.parse(await file.text())); }
-    catch (error) { status.textContent = 'World契約を拒否: ' + error.message; }
+    catch (error) { state.world = null; state.lens = null; state.history = []; state.selected = null;
+      render(); status.textContent = 'World契約を拒否: ' + error.message; }
     event.target.value = '';
   });
   back.addEventListener('click', () => {
