@@ -1,0 +1,114 @@
+{
+  "schema": "visions.processWorld/1",
+  "source": "synthetic-fixture",
+  "authority": false,
+  "entities": [
+    {
+      "id": "director",
+      "label": "経営",
+      "kind": "actor"
+    },
+    {
+      "id": "director.goal",
+      "label": "目的を定める",
+      "kind": "process"
+    },
+    {
+      "id": "director.judge",
+      "label": "成果を評価する",
+      "kind": "process"
+    },
+    {
+      "id": "manager",
+      "label": "管理",
+      "kind": "actor"
+    },
+    {
+      "id": "manager.goal",
+      "label": "業務条件を定める",
+      "kind": "process"
+    },
+    {
+      "id": "manager.judge",
+      "label": "作業を確認する",
+      "kind": "process"
+    },
+    {
+      "id": "staff",
+      "label": "現場",
+      "kind": "actor"
+    },
+    {
+      "id": "staff.goal",
+      "label": "対象を調べる",
+      "kind": "process"
+    },
+    {
+      "id": "staff.judge",
+      "label": "CSVを出力する",
+      "kind": "process"
+    }
+  ],
+  "relations": [
+    {
+      "id": "d0",
+      "from": "director",
+      "to": "director.goal",
+      "kind": "contains"
+    },
+    {
+      "id": "d1",
+      "from": "director",
+      "to": "director.judge",
+      "kind": "contains"
+    },
+    {
+      "id": "m0",
+      "from": "manager",
+      "to": "manager.goal",
+      "kind": "contains"
+    },
+    {
+      "id": "m1",
+      "from": "manager",
+      "to": "manager.judge",
+      "kind": "contains"
+    },
+    {
+      "id": "s0",
+      "from": "staff",
+      "to": "staff.goal",
+      "kind": "contains"
+    },
+    {
+      "id": "s1",
+      "from": "staff",
+      "to": "staff.judge",
+      "kind": "contains"
+    },
+    {
+      "id": "v0",
+      "from": "director",
+      "to": "manager",
+      "kind": "views"
+    },
+    {
+      "id": "v1",
+      "from": "manager",
+      "to": "staff",
+      "kind": "views"
+    },
+    {
+      "id": "rel0",
+      "from": "manager.judge",
+      "to": "staff.judge",
+      "kind": "corresponds",
+      "state": "unknown",
+      "evidence": []
+    }
+  ],
+  "lens": {
+    "who": "director",
+    "whom": "manager"
+  }
+}

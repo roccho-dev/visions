@@ -102,6 +102,11 @@ try
         Check("host environment cannot add listeners", server.Url.StartsWith("http://127.0.0.1:", StringComparison.Ordinal));
         var page = await client.GetAsync(server.Url);
         Check("local viewer opens", page.StatusCode == HttpStatusCode.OK);
+        var lensPage = await client.GetStringAsync(server.Url + "process-lens.html");
+        var worldFixture = await client.GetStringAsync(server.Url + "process-world.json");
+        var lensScript = await client.GetStringAsync(server.Url + "lens.mjs");
+        Check("lens endpoints are bundled on loopback", lensPage.Contains("process-graph") && lensScript.Contains("projectWorld"));
+        Check("synthetic World is explicitly labeled", worldFixture.Contains("synthetic-fixture") && worldFixture.Contains("authority"));
         Check("CSP blocks embedded foreign content", page.Headers.GetValues("Content-Security-Policy").Single().Contains("frame-ancestors 'none'"));
         var model = await client.GetStringAsync(server.Url + "model");
         Check("viewer never serves extracted body", !model.Contains("SENSITIVE_MARKER") && model.Contains("artifact"));

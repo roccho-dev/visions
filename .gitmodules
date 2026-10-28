@@ -1,0 +1,3 @@
+[submodule "ui"]
+	path = deps/ui
+	url = https://github.com/roccho-dev/ui.git

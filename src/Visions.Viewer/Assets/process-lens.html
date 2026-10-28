@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>visions — Process Lens</title><link rel="stylesheet" href="lens.css"><script type="module" src="lens-view.mjs"></script></head>
+<body><header><div><small>VISIONS · UI DEPENDENCY · LOCAL</small><h1>誰が → 誰を</h1></div>
+<div class="tools"><button id="process-demo">合成デモ</button><label>World JSON<input id="process-file" type="file" accept=".json,application/json"></label>
+<button id="process-back" disabled>↩ 戻る</button><button id="process-fit">全体表示</button></div></header>
+<nav id="process-lenses" aria-label="誰が誰を見るかの視点"></nav>
+<p id="process-status" role="status">業務Worldは未提供です。合成デモ、または管理側から提供されたWorld JSONを選択してください。</p>
+<div id="process-graph" tabindex="0" aria-label="誰が・誰をの再帰プロセスグラフ"></div>
+<p class="note">意味とズレは供給された記録です。UIは判定せず、未観測を正常と見なしません。詳細はグラフ上のPopupだけです。</p>
+</body></html>

@@ -44,7 +44,8 @@ internal sealed class Launcher : Form
         demoButton = AddButton(controls, "デモ", () => { try { SelectCapture(Demo.Create(CaptureDirectory)); } catch { status.Text = "デモを保存できません。"; } });
         layout.Controls.Add(controls); layout.Controls.Add(status);
         var view = new FlowLayoutPanel { AutoSize = true }; view.Controls.Add(captures);
-        AddButton(view, "可視化を開く", OpenViewer); layout.Controls.Add(view);
+        AddButton(view, "可視化を開く", OpenViewer);
+        AddButton(view, "Process Lens", OpenProcessLens); layout.Controls.Add(view);
         AddButton(layout, "保存場所を開く", () => Process.Start(new ProcessStartInfo(workspace) { UseShellExecute = true }));
         layout.Controls.Add(new Label { Text = "CSV等の取り込みは原本をコピーします。本体の機微情報は除去されません。\n保存期限の自動削除は未実装です。試用後は保存場所から削除してください。", AutoSize = true, MaximumSize = new Size(620, 0), Margin = new Padding(0, 12, 0, 0) });
         start.Click += async (_, _) => await StartCapture();
@@ -181,6 +182,11 @@ internal sealed class Launcher : Form
     {
         if (viewer is null) { status.Text = "可視化の初期化が終わっていません。"; return; }
         Process.Start(new ProcessStartInfo(viewer.Url) { UseShellExecute = true });
+    }
+    private void OpenProcessLens()
+    {
+        if (viewer is null) { status.Text = "可視化の初期化が終わっていません。"; return; }
+        Process.Start(new ProcessStartInfo(viewer.Url + "process-lens.html") { UseShellExecute = true });
     }
     protected override void Dispose(bool disposing)
     {
