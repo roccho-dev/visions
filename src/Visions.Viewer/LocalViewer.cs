@@ -21,7 +21,9 @@ public sealed class LocalViewer : IAsyncDisposable
     public static async Task<LocalViewer> StartAsync(Func<string?> selectedCapture)
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [] });
-        builder.Logging.ClearProviders(); // No access logs containing the local capability URL.
+        // Do not let environment variables or appsettings add externally reachable listeners.
+        builder.Configuration.Sources.Clear();
+        builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
         var app = builder.Build();
         var prefix = "/s/" + Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
