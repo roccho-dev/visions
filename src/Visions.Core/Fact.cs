@@ -45,6 +45,9 @@ public static class Contract
         Require(f.V == 1 && Hex(f.Id, 32) && Hex(f.Source, 32) && Hex(f.CaptureId, 32));
         Require(f.Seq > 0 && f.At.Offset == TimeSpan.Zero && f.At != default);
         var d = f.Data;
+        Require(d.ValueKind == JsonValueKind.Object);
+        foreach (var property in d.EnumerateObject())
+            Require(property.Value.ValueKind == (property.Name == "bytes" ? JsonValueKind.Number : JsonValueKind.String));
         switch (f.Kind)
         {
             case "capture":
