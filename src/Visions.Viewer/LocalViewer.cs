@@ -21,7 +21,6 @@ public sealed class LocalViewer : IAsyncDisposable
     public static async Task<LocalViewer> StartAsync(Func<string?> selectedCapture)
     {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [] });
-        // Do not let environment variables or appsettings add externally reachable listeners.
         builder.Configuration.Sources.Clear();
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
@@ -39,19 +38,27 @@ public sealed class LocalViewer : IAsyncDisposable
             context.Response.Headers.CacheControl = "no-store";
             context.Response.Headers["X-Content-Type-Options"] = "nosniff";
             context.Response.Headers["Referrer-Policy"] = "no-referrer";
+            // ui/maxGraph owns inline layout styles; scripts remain same-origin and eval is forbidden.
+            var styles = req.Path == prefix + "/process-lens.html" ? "'self' 'unsafe-inline'" : "'self'";
             context.Response.Headers["Content-Security-Policy"] =
-                "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
+                $"default-src 'none'; script-src 'self'; style-src {styles}; img-src data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'";
             await next(context);
         });
-        foreach (var (name, type) in new[] { ("index.html", "text/html; charset=utf-8"),
-            ("app.js", "text/javascript; charset=utf-8"), ("style.css", "text/css; charset=utf-8"),
-            ("process-lens.html", "text/html; charset=utf-8"),
-            ("lens.mjs", "text/javascript; charset=utf-8"),
-            ("process-world.json", "application/json; charset=utf-8") })
+        // Only the build's exact embedded manifest is routable. No filesystem or arbitrary source path is exposed.
+        var assembly = Assembly.GetExecutingAssembly();
+        foreach (var resource in assembly.GetManifestResourceNames().Where(name => name.StartsWith("Assets/", StringComparison.Ordinal)))
         {
-            var resource = $"Visions.Viewer.Assets.{name}";
-            using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource)
-                ?? throw new InvalidOperationException("missing_asset");
+            var name = resource["Assets/".Length..].Replace('\\', '/');
+            if (name.Split('/').Any(part => part is "" or "." or "..")) throw new InvalidOperationException("invalid_asset");
+            var type = Path.GetExtension(name) switch
+            {
+                ".html" => "text/html; charset=utf-8",
+                ".js" or ".mjs" => "text/javascript; charset=utf-8",
+                ".css" => "text/css; charset=utf-8",
+                ".json" => "application/json; charset=utf-8",
+                _ => "text/plain; charset=utf-8"
+            };
+            using var stream = assembly.GetManifestResourceStream(resource) ?? throw new InvalidOperationException("missing_asset");
             using var reader = new StreamReader(stream);
             var content = await reader.ReadToEndAsync();
             app.MapGet(prefix + (name == "index.html" ? "/" : "/" + name), () => Results.Text(content, type));

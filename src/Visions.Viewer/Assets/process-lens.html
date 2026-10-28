@@ -1,14 +1,11 @@
 <!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>visions — Process Lens</title><link rel="stylesheet" href="style.css"><script type="module" src="lens.mjs"></script></head>
-<body class="process-lens">
-<header><div><span class="eyebrow">VISIONS · PROCESS LENS · LOCAL</span><h1>誰が → 誰を</h1>
-<p>同じプロセスを、見る側・見られる側から再帰表示。詳細はSVG上の選択箇所だけ。</p></div>
-<div class="process-tools"><button id="process-demo">合成デモ</button>
-<label class="process-import">World JSONを選択<input id="process-file" type="file" accept=".json,application/json"></label>
+<title>visions — Process Lens</title><link rel="stylesheet" href="lens.css"><script type="module" src="lens-view.mjs"></script></head>
+<body><header><div><small>VISIONS · UI DEPENDENCY · LOCAL</small><h1>誰が → 誰を</h1></div>
+<div class="tools"><button id="process-demo">合成デモ</button><label>World JSON<input id="process-file" type="file" accept=".json,application/json"></label>
 <button id="process-back" disabled>↩ 戻る</button><button id="process-fit">全体表示</button></div></header>
-<main><nav id="process-lenses" class="process-lenses" aria-label="誰が誰を見るかの視点"></nav>
+<nav id="process-lenses" aria-label="誰が誰を見るかの視点"></nav>
 <p id="process-status" role="status">業務Worldは未提供です。合成デモ、または管理側から提供されたWorld JSONを選択してください。</p>
-<svg id="process-graph" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="同じ再帰グラフを左右に表示するProcess Lens" viewBox="0 0 1000 650" tabindex="0"></svg>
-<p class="process-footnote">UIは業務上の一致・ズレを計算しません。関係や根拠が未提供なら不明です。観測区間のログだけから業務完了を推測しません。</p></main>
+<div id="process-graph" tabindex="0" aria-label="誰が・誰をの再帰プロセスグラフ"></div>
+<p class="note">意味とズレは供給された記録です。UIは判定せず、未観測を正常と見なしません。詳細はグラフ上のPopupだけです。</p>
 </body></html>

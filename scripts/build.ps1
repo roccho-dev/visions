@@ -2,11 +2,15 @@ param([switch]$Publish)
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 function Check-Exit { if ($LASTEXITCODE -ne 0) { throw "Command failed: $LASTEXITCODE" } }
-node --check src/Visions.Viewer/Assets/app.js
+node scripts/build-ui.mjs
 Check-Exit
-node --check src/Visions.Viewer/Assets/lens.mjs
-Check-Exit
+foreach ($file in @('app.js', 'lens.mjs', 'lens-scene.mjs', 'lens-view.mjs')) {
+  node --check "src/Visions.Viewer/Assets/$file"
+  Check-Exit
+}
 node tests/process-lens.test.mjs
+Check-Exit
+node tests/process-lens-ui.test.mjs
 Check-Exit
 dotnet run --project tests/Visions.Tests -c Release
 Check-Exit
@@ -25,6 +29,9 @@ Copy-Item docs/DEPENDENCIES.md $package
 $assets = Get-Content src/Visions.Windows/obj/project.assets.json -Raw | ConvertFrom-Json
 $noticeRoot = Join-Path $package 'licenses'
 New-Item $noticeRoot -ItemType Directory -Force | Out-Null
+$uiNotices = Join-Path $noticeRoot 'ui'
+New-Item $uiNotices -ItemType Directory -Force | Out-Null
+Get-ChildItem src/Visions.Viewer/Assets/ui -File | Where-Object { $_.Name -ne 'package.json' } | Copy-Item -Destination $uiNotices
 function Copy-Notices([string]$Location, [string]$Name) {
   $destination = Join-Path $noticeRoot $Name
   New-Item $destination -ItemType Directory -Force | Out-Null

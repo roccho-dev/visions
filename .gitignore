@@ -4,3 +4,4 @@ dist/
 work/
 *.user
 *.suo
+src/Visions.Viewer/Assets/ui/

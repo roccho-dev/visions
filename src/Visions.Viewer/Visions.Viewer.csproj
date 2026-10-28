@@ -2,7 +2,10 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../Visions.Core/Visions.Core.csproj" />
-    <EmbeddedResource Include="Assets/*" />
-    <EmbeddedResource Include="../../examples/process-lens/world.json" LogicalName="Visions.Viewer.Assets.process-world.json" />
+    <EmbeddedResource Include="Assets/**/*" LogicalName="Assets/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../examples/process-lens/world.json" LogicalName="Assets/process-world.json" />
   </ItemGroup>
+  <Target Name="RequireUiDependency" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('Assets/ui/provenance.json')" Text="Build the pinned ui dependency first: node scripts/build-ui.mjs" />
+  </Target>
 </Project>
