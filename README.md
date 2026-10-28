@@ -1,76 +1,85 @@
 # visions
 
-業務の**事実を記録し、流れを見せる**ための小さな基盤。Windowsから始め、Linuxや別のRPAツールを後から接続できる。
+業務の**観測事実を残し、流れ・時間・根拠を可視化する**小さな基盤。Windowsを先行し、Linuxや別の取得手段にも拡張する。
 
 ## 何を見せるか
 
-1. **どう進んだか**：業務の順序と分岐。
-2. **どこで滞ったか**：経過時間、繰り返し、戻りの候補。
-3. **なぜそう見えるか**：各表示から元の観測事実へ戻れること。
+1. **流れ**：何が、どの順に起きたか。
+2. **時間**：どこで時間が経過し、何が繰り返されたか。
+3. **根拠**：その表示はどの記録に基づくか。不明なら不明と示す。
 
-最初のUIはこの3問に答える**localhostの1画面**だけ。業務の意味や完了を操作ログだけから断定しない。
+初期画面はlocalhostの読取専用1画面だけ。操作の順序を業務上の因果、時刻差を作業時間、記録区間を1件の業務と**断定しない**。
 
-## 構成
+## 境界
 
 ```mermaid
-flowchart LR
-  subgraph PROVIDE["📤 提供側｜OS非依存のCore"]
-    subgraph PORT["🔌 接続"]
+flowchart TB
+  subgraph PROVIDER["📤 提供側"]
+    subgraph SOURCE["🔌 取得元Adapter"]
       WIN["🪟 Windows｜先行"]
       LIN["🐧 Linux｜後続"]
-      LOG["📝 ログ化Adapter"]
-      EXT["📥 抽出Adapter"]
+      FILE["📄 アプリAPI・ファイル"]
     end
-    CORE["⚙️ 正規化・検証・追記"]
+    subgraph MODE["🧩 用途Adapter"]
+      LOG["📝 ログ化"]
+      EXT["📥 抽出"]
+    end
+    CORE["⚙️ Core｜正規化・検証・追記"]
     WIN --> LOG & EXT
     LIN -.-> LOG & EXT
+    FILE --> EXT
     LOG & EXT --> CORE
   end
-  subgraph DATA["📜 共通データ契約"]
-    RUN["Run"]
-    EVT["Observation"]
-    ART["ArtifactRef"]
+  subgraph DATA["📜 共通契約｜OS非依存"]
+    FACT[("facts.jsonl｜追記正本")]
+    ART[("抽出物｜本体は別管理")]
   end
-  subgraph CONSUME["🌐 消費側｜localhostのみ"]
-    PROJ["🔄 投影・変換"]
-    VIEW["👁️ 流れ・時間・根拠"]
+  subgraph CONSUMER["🌐 消費側｜localhostのみ"]
+    PROJ["🔄 Projection｜分類・集約・根拠照合"]
+    VIEW["👁️ Viewer｜流れ・時間・根拠"]
     PROJ --> VIEW
   end
-  CORE --> RUN & EVT & ART
-  RUN & EVT & ART --> PROJ
+  CORE --> FACT
+  EXT --> ART
+  FACT --> PROJ
 ```
 
-**CoreはWindows APIを知らない。ViewerはOS・RPA・抽出の実行方法を知らない。** アダプタは入力を共通契約へ変えるだけ。RPAツールも必要になった時点で接続する。
+CoreはWindows/LinuxのAPIを知らない。ViewerはOS、RPA、抽出の実行方法を知らない。RPA製品は必要になったときだけ取得元Adapterとして追加する。
 
-## 最小ドメインモデル
+## 最小ドメイン契約
 
-| 正本 | 最小の属性 | 意味 |
+正本は**1種類のRecord**（追記型JSONL）。各行の共通項目は `id`・`kind`・`at`・`source`・`seq`・`capture_id?`・`data`。
+
+| `kind` | `data` に必要な意味 | 表す事実 |
 | --- | --- | --- |
-| **Run** | `id`, `started_at`, `ended_at?`, `scope` | 明示された観測区間。業務1件と同一とは限らない |
-| **Observation** | `id`, `at`, `source`, `kind`, `target?`, `run_id?`, `evidence?` | 観測した出来事。推測した業務名を混ぜない |
-| **ArtifactRef** | `id`, `at`, `source`, `run_id?`, `type`, `count?`, `digest?` | 抽出成果物の参照と検証用メタデータ。本体は別管理 |
+| `capture` | `phase`（start/end）、`scope` | 記録区間の境界 |
+| `observation` | `event`、`target?` | 観測した操作・状態変化 |
+| `artifact` | `type`、`digest?`、`count?` | 抽出物への参照・検証用情報 |
 
-- 正本は追記型のJSONL。訂正・意味付けは元の観測を変更せず、別の判断として扱う。
-- `source` はOS・アプリ・アダプタを識別する。OS固有の識別子は共通項目へ押し込まない。
-- `run_id` や業務単位が不明なら **unknown** のまま表示する。時刻差を実作業時間と断定しない。
-- パスワード、入力文字、患者情報、画面画像は既定では記録しない。保存前に許可範囲を検証する。
+- `source` は取得元・Adapterを識別し、`seq` は**同一取得元内**の順序を表す。異なる取得元の厳密な順序は推定しない。
+- `capture_id` は観測区間の参照であって、**Case ID（業務案件）ではない**。不明な業務単位を捏造しない。
+- OS固有の識別子はAdapter内で扱う。`target` に患者名・入力文字・画面の生ラベルを保存しない。
+- 個人情報、パスワード、キーストローク、画面画像は既定で記録しない。保存前に許可項目だけを通す。
+- `artifact` は抽出データの中身ではない。成果物は別管理し、記録には参照・検証情報だけ残す。
 
-## 消費側だけが作る投影
+## 可視化は投影で作る
 
-`Run + Observation + ArtifactRef → Step → Transition → Summary`
+`facts.jsonl + 投影規則 + 規則の版 → Step / Transition / Summary → 1画面`
 
-- **Step**：元イベントに紐づく表示用の手順（未分類を許す）。
-- **Transition**：観測できた順序・回数。業務上の因果関係とは呼ばない。
-- **Summary**：経過時間・繰り返し・戻り候補と、その根拠のイベントID。
+- **Step**：根拠イベントに結び付いた表示単位。業務名は根拠がある場合だけ付ける。
+- **Transition**：確認できる順序と回数。欠損・複数業務の混在を隠さない。
+- **Summary**：経過時間・反復・戻りの候補。作業時間や改善余地とは断定しない。
 
-投影は正本ではない。規則を改善したら同じJSONLから再生成する。可視化は `127.0.0.1` 限定・外部送信なし・外部CDNなし。
+投影は正本に書き戻さない。同じ入力なら同じ表示になり、各表示から元のRecordを追える。Viewerは`127.0.0.1`限定・外部送信なし・外部CDNなし。
 
-## 並行開発と合格条件
+## 並行開発の受入条件
 
 | 提供側 | 消費側 |
 | --- | --- |
-| Windowsログ化Adapterと抽出Adapterを独立に追加 | 合成JSONLだけで1画面を完成 |
-| 共通モデルへの変換・検証・追記 | 投影・変換・表示を実装 |
-| 将来Linux Adapterへ差し替え | OSが変わっても表示コードは不変 |
+| 共通Recordを検証・追記 | 合成JSONLから投影・表示 |
+| Windowsのログ化・抽出Adapterを個別実装 | OSに依存せず流れ・時間・根拠を表示 |
+| 将来Linux Adapterを追加 | Viewerの契約は変更しない |
 
-**合格**：同一JSONLから同一の表示が再現される／各表示が根拠へ戻れる／不明を勝手に補わない／機微情報を保存しない。実機での捕捉率や性能は、別途測ってから主張する。
+最初に共有するのは**Recordの意味・合成JSONL・期待表示**だけ。両者はそれぞれ独立に合格できる。
+
+**合格**：正本の再現性／表示から根拠への追跡／不明・欠損の非隠蔽／保存前の機微情報除外。実機捕捉率・性能・業務改善効果は未実証として別途測る。
