@@ -3,5 +3,6 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../Visions.Core/Visions.Core.csproj" />
     <EmbeddedResource Include="Assets/*" />
+    <EmbeddedResource Include="../../examples/process-lens/world.json" LogicalName="Visions.Viewer.Assets.process-world.json" />
   </ItemGroup>
 </Project>
