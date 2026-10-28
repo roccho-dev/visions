@@ -4,6 +4,10 @@ Set-Location (Split-Path $PSScriptRoot -Parent)
 function Check-Exit { if ($LASTEXITCODE -ne 0) { throw "Command failed: $LASTEXITCODE" } }
 node --check src/Visions.Viewer/Assets/app.js
 Check-Exit
+node --check src/Visions.Viewer/Assets/lens.mjs
+Check-Exit
+node tests/process-lens.test.mjs
+Check-Exit
 dotnet run --project tests/Visions.Tests -c Release
 Check-Exit
 if (-not $IsWindows) { if ($Publish) { throw 'Publishing and executable smoke tests require Windows.' }; exit 0 }
