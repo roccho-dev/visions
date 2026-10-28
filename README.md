@@ -44,17 +44,17 @@ flowchart TB
   FACT --> PROJ
 ```
 
-CoreはWindows/LinuxのAPIを知らない。ViewerはOS、RPA、抽出の実行方法を知らない。RPA製品は必要になったときだけ取得元Adapterとして追加する。
+CoreはWindows/LinuxのAPIを知らない。ViewerはOS、RPA、抽出の実行方法を知らない。RPAツール対応は必要になったときだけ用途Adapterに追加する。
 
 ## 最小ドメイン契約
 
-正本は**1種類のRecord**（追記型JSONL）。各行の共通項目は `id`・`kind`・`at`・`source`・`seq`・`capture_id?`・`data`。
+正本は**1種類のRecord**（追記型JSONL）。各行の共通項目は `id`・`kind`・`at`（観測時刻）・`source`・`seq`・`capture_id?`・`data`。
 
 | `kind` | `data` に必要な意味 | 表す事実 |
 | --- | --- | --- |
 | `capture` | `phase`（start/end）、`scope` | 記録区間の境界 |
 | `observation` | `event`、`target?` | 観測した操作・状態変化 |
-| `artifact` | `type`、`digest?`、`count?` | 抽出物への参照・検証用情報 |
+| `artifact` | `ref`、`type`、`digest?`、`count?` | 抽出物への参照・検証用情報 |
 
 - `source` は取得元・Adapterを識別し、`seq` は**同一取得元内**の順序を表す。異なる取得元の厳密な順序は推定しない。
 - `capture_id` は観測区間の参照であって、**Case ID（業務案件）ではない**。不明な業務単位を捏造しない。
