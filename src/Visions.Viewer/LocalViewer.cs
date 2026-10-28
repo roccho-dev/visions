@@ -44,7 +44,10 @@ public sealed class LocalViewer : IAsyncDisposable
             await next(context);
         });
         foreach (var (name, type) in new[] { ("index.html", "text/html; charset=utf-8"),
-            ("app.js", "text/javascript; charset=utf-8"), ("style.css", "text/css; charset=utf-8") })
+            ("app.js", "text/javascript; charset=utf-8"), ("style.css", "text/css; charset=utf-8"),
+            ("process-lens.html", "text/html; charset=utf-8"),
+            ("lens.mjs", "text/javascript; charset=utf-8"),
+            ("process-world.json", "application/json; charset=utf-8") })
         {
             var resource = $"Visions.Viewer.Assets.{name}";
             using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource)
