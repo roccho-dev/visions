@@ -16,6 +16,11 @@ internal static class Program
             try { Smoke(args[1]).GetAwaiter().GetResult(); return 0; }
             catch { return 2; }
         }
+        if (args.Length == 2 && args[0] == "--uia-probe")
+        {
+            ApplicationConfiguration.Initialize();
+            return Probe.Run(args[1]);
+        }
         if (args.Length != 0) return 2;
         ApplicationConfiguration.Initialize();
         Application.Run(new Launcher());
@@ -26,7 +31,7 @@ internal static class Program
         var info = new ProcessStartInfo(Environment.ProcessPath!)
         { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
         if (System.IO.Path.GetFileNameWithoutExtension(info.FileName).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
-            info.ArgumentList.Add(typeof(Program).Assembly.Location);
+            info.ArgumentList.Add(Environment.GetCommandLineArgs()[0]);
         foreach (var arg in args) info.ArgumentList.Add(arg);
         return info;
     }

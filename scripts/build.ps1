@@ -2,6 +2,8 @@ param([switch]$Publish)
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
 function Check-Exit { if ($LASTEXITCODE -ne 0) { throw "Command failed: $LASTEXITCODE" } }
+node --check src/Visions.Viewer/Assets/app.js
+Check-Exit
 dotnet run --project tests/Visions.Tests -c Release
 Check-Exit
 if (-not $IsWindows) { if ($Publish) { throw 'Publishing and executable smoke tests require Windows.' }; exit 0 }
@@ -15,7 +17,6 @@ dotnet publish src/Visions.Windows -c Release -r win-x64 --self-contained true -
 Check-Exit
 Copy-Item docs/USAGE.md (Join-Path $package 'READ-ME.md')
 Copy-Item docs/DEPENDENCIES.md $package
-# Preserve dependency attribution from the exact restored packages, including runtime packs.
 $assets = Get-Content src/Visions.Windows/obj/project.assets.json -Raw | ConvertFrom-Json
 $noticeRoot = Join-Path $package 'licenses'
 New-Item $noticeRoot -ItemType Directory -Force | Out-Null
@@ -33,13 +34,15 @@ dotnet list src/Visions.Windows package --include-transitive --format json | Set
 Check-Exit
 $smoke = Join-Path ([System.IO.Path]::GetTempPath()) ('visions-smoke-' + [guid]::NewGuid().ToString('N'))
 try {
-  $process = Start-Process (Join-Path $package 'Visions.exe') -ArgumentList @('--smoke', ('"' + $smoke + '"')) -PassThru
-  if (-not $process.WaitForExit(30000)) { $process.Kill(); throw 'Published executable smoke timeout.' }
-  if ($process.ExitCode -ne 0 -or -not (Test-Path (Join-Path $smoke 'smoke-ok.txt'))) { throw 'Published executable smoke failed.' }
-  Copy-Item (Join-Path $smoke 'smoke-ok.txt') $package
+  foreach ($kind in @('smoke', 'uia-probe')) {
+    $process = Start-Process (Join-Path $package 'Visions.exe') -ArgumentList @("--$kind", ('"' + $smoke + '"')) -PassThru
+    if (-not $process.WaitForExit(40000)) { $process.Kill(); throw "Published executable $kind timeout." }
+    if ($process.ExitCode -ne 0 -or -not (Test-Path (Join-Path $smoke "$kind-ok.txt"))) { throw "Published executable $kind failed." }
+    Copy-Item (Join-Path $smoke "$kind-ok.txt") $package
+    Get-Content (Join-Path $smoke "$kind-ok.txt")
+  }
 } finally { if (Test-Path $smoke) { Remove-Item $smoke -Recurse -Force } }
 $stamp = [TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, 'Tokyo Standard Time').ToString('yyMMddHHmmss')
-# Thread id has not been supplied. The placeholder is explicit rather than an invented id.
 $zip = Join-Path (Get-Location) "dist/$stamp.id-pending.dist.zip"
 Compress-Archive -Path "$package/*" -DestinationPath $zip -Force
 $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
