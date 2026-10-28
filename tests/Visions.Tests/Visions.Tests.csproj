@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../src/Visions.Core/Visions.Core.csproj" /><ProjectReference Include="../../src/Visions.Viewer/Visions.Viewer.csproj" /></ItemGroup>
+</Project>
