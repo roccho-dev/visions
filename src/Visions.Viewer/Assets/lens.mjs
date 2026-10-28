@@ -128,7 +128,7 @@ if (typeof document !== 'undefined') {
     const list = state.selected ? [state.selected.item.label || state.selected.item.kind,
       'ref: ' + state.selected.item.id,
       '種類: ' + state.selected.item.kind,
-      '状態: ' + (state.selected.item.state || '提供なし'),
+      '提供状態: ' + (state.selected.item.state || '提供なし'),
       '根拠: ' + (state.selected.item.evidence?.join(', ') || '未提供')] : [];
     if (list.length) {
       const { x, y } = state.selected.at;
